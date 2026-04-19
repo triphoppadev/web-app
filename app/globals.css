@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-syne: 'Syne', sans-serif;
+  --font-dm-sans: 'DM Sans', sans-serif;
+  --purple: #96298d;
+  --yellow: #f6ab2d;
+  --soft: #f7f5ff;
+  --deep: #392b75;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-dm-sans);
+  background-color: #ffffff;
+  color: var(--deep);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-syne);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f7f5ff; }
+::-webkit-scrollbar-thumb { background: #96298d44; border-radius: 3px; }
+
+/* Capacity bar */
+.capacity-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #e8d5e7;
+  overflow: hidden;
+}
+.capacity-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #96298d, #f6ab2d);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
