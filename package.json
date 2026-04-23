@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node index.js",
     "lint": "next lint",
     "seed": "node -e \"require('dotenv').config({path:'.env.local'})\" -r dotenv/config node_modules/.bin/ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" scripts/seed.ts"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.2.0",
+    "@stripe/stripe-js": "^9.3.0",
     "@tailwindcss/postcss": "^4.2.2",
+    "axios": "^1.15.2",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "firebase": "^12.12.0",
@@ -21,12 +24,15 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.6.0",
+    "stripe": "^22.0.2",
+    "uuid": "^14.0.0",
     "zustand": "^4.5.7"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/uuid": "^11.0.0",
     "autoprefixer": "^10.5.0",
     "dotenv": "^17.4.2",
     "eslint": "^10.2.1",
