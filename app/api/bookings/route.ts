@@ -1,32 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/mongodb'
-import { Booking } from '@/models/Booking'
-import { Shipment } from '@/models/Shipment'
-import { Notification } from '@/models/Notifications'
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import { Booking } from "@/models/Booking";
+import { Shipment } from "@/models/Shipment";
+import { Notification } from "@/models/Notifications";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDB()
-    const uid = req.headers.get('x-user-uid')
-    if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    await connectDB();
+    const uid = req.headers.get("x-user-uid");
+    if (!uid)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const bookings = await Booking.find({ userId: uid })
-      .populate('shipmentId')
+      .populate("shipmentId")
       .sort({ createdAt: -1 })
-      .lean()
+      .lean();
 
-    return NextResponse.json({ bookings }, { status: 200 })
+    return NextResponse.json({ bookings }, { status: 200 });
   } catch (err) {
-    console.error('[GET /api/bookings]', err)
-    return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 })
+    console.error("[GET /api/bookings]", err);
+    return NextResponse.json(
+      { error: "Failed to fetch bookings" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB()
-    const uid = req.headers.get('x-user-uid')
-    if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    await connectDB();
+    const uid = req.headers.get("x-user-uid");
+    if (!uid)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const {
       shipmentId,
@@ -38,34 +43,37 @@ export async function POST(req: NextRequest) {
       userEmail,
       totalPrice,
       specialInstructions,
-    } = await req.json()
+    } = await req.json();
 
     if (!shipmentId) {
-      return NextResponse.json({ error: 'Invalid booking data' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid booking data" },
+        { status: 400 },
+      );
     }
 
-    let shipment = null
+    // Verify shipment exists and has capacity — but DO NOT deduct yet
+    // Capacity is only deducted after payment is confirmed
+    const shipment = await Shipment.findOne({
+      _id: shipmentId,
+      status: "upcoming",
+    });
 
-    // Only deduct kg for air freight
-    if (freightMode !== 'sea' && kgBooked > 0) {
-      shipment = await Shipment.findOneAndUpdate(
+    if (!shipment) {
+      return NextResponse.json(
+        { error: "Shipment not found or no longer available" },
+        { status: 404 },
+      );
+    }
+
+    // Check capacity is sufficient (soft check — not deducted yet)
+    if (freightMode !== "sea" && kgBooked > shipment.remainingCapacityKg) {
+      return NextResponse.json(
         {
-          _id: shipmentId,
-          remainingCapacityKg: { $gte: kgBooked },
-          status: 'upcoming',
+          error: `Only ${shipment.remainingCapacityKg}kg remaining on this shipment`,
         },
-        { $inc: { remainingCapacityKg: -kgBooked } },
-        { new: true }
-      )
-
-      if (!shipment) {
-        return NextResponse.json(
-          { error: 'Shipment unavailable or insufficient capacity' },
-          { status: 409 }
-        )
-      }
-    } else {
-      shipment = await Shipment.findById(shipmentId)
+        { status: 409 },
+      );
     }
 
     const booking = await Booking.create({
@@ -74,24 +82,30 @@ export async function POST(req: NextRequest) {
       userEmail,
       userName,
       kgBooked: kgBooked ?? 0,
+      cbmBooked: cbmBooked ?? 0,
+      freightMode: freightMode ?? "air",
+      goodsType: goodsType ?? "normal",
       totalPrice: totalPrice ?? 0,
       specialInstructions,
-      status: 'pending',
-      paymentStatus: 'unpaid',
-    })
+      status: "pending",
+      paymentStatus: "unpaid",
+    });
 
-    // Create notification
+    // Notify user — capacity not yet reserved
     await Notification.create({
       userId: uid,
-      title: 'Booking confirmed!',
-      message: `Your booking for ${shipment?.route ?? 'shipment'} is pending confirmation. Total: $${totalPrice?.toFixed(2)}`,
-      type: 'booking',
-      link: '/bookings',
-    })
+      title: "Booking saved!",
+      message: `Your booking for ${shipment.route} has been saved. Complete payment to reserve your space.`,
+      type: "booking",
+      link: "/bookings",
+    });
 
-    return NextResponse.json({ booking }, { status: 201 })
+    return NextResponse.json({ booking }, { status: 201 });
   } catch (err) {
-    console.error('[POST /api/bookings]', err)
-    return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
+    console.error("[POST /api/bookings]", err);
+    return NextResponse.json(
+      { error: "Failed to create booking" },
+      { status: 500 },
+    );
   }
 }

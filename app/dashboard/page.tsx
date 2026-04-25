@@ -3,79 +3,161 @@
 import { useState } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import Navbar from '@/components/Navbar'
+import RouteCard from '@/components/RouteCard'
+import BookingModal from '@/components/BookingModal'
 import PaymentModal from '@/components/PaymentModal'
-import { useBookings, type Booking } from '@/lib/hooks/useBookings'
-import { format } from 'date-fns'
-import {
-  Package,
-  Plane,
-  Calendar,
-  Weight,
-  RefreshCw,
-  CreditCard,
-} from 'lucide-react'
-import clsx from 'clsx'
+import { useAuth } from '@/lib/auth-context'
+import { useUser } from '@/lib/hooks/useUser'
+import { useShipments, type Shipment } from '@/lib/hooks/useShipments'
+import { Package, TrendingUp, Clock, Search } from 'lucide-react'
 import Link from 'next/link'
 
-export default function BookingsPage() {
+const ROUTES = [
+  'All routes',
+  'USA \u2192 Rwanda',
+  'Canada \u2192 Rwanda',
+  'UK \u2192 Rwanda',
+  'China \u2192 Rwanda',
+  'Dubai \u2192 Rwanda',
+]
+
+export default function DashboardPage() {
   return (
     <AuthGuard>
-      <BookingsContent />
+      <DashboardContent />
     </AuthGuard>
   )
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  confirmed: 'bg-blue-100 text-blue-700 border-blue-200',
-  completed: 'bg-green-100 text-green-700 border-green-200',
-  cancelled: 'bg-red-100 text-red-500 border-red-200',
-}
+function DashboardContent() {
+  const { user } = useAuth()
+  const { profile } = useUser()
+  const [routeFilter, setRouteFilter] = useState('All routes')
+  const [search, setSearch] = useState('')
+  const { shipments, loading, error, refetch } = useShipments(routeFilter)
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
+  const [pendingPayment, setPendingPayment] = useState<{
+    bookingId: string
+    amount: number
+    route: string
+  } | null>(null)
 
-const PAYMENT_STYLES: Record<string, string> = {
-  unpaid: 'bg-gray-100 text-gray-500',
-  paid: 'bg-green-100 text-green-600',
-  refunded: 'bg-purple-100 text-purple-600',
-}
+  const displayName = user?.displayName ?? user?.email?.split('@')[0] ?? 'there'
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-function BookingsContent() {
-  const { bookings, loading, error, refetch } = useBookings()
-  const [payingBooking, setPayingBooking] = useState<Booking | null>(null)
+  const filtered = shipments.filter(s =>
+    search === '' || s.route.toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <div className="min-h-screen bg-[#f7f5ff]">
       <Navbar />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
 
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {/* Greeting */}
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#392b75]">My Bookings</h1>
-            <p className="text-sm text-gray-500 mt-1">Track all your cargo shipments</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#392b75]">
+              {greeting}, {displayName} 👋
+            </h1>
+            <p className="text-gray-500 mt-1 text-sm">
+              {profile?.role === 'admin'
+                ? 'You have admin access.'
+                : 'Ready to ship something today?'}
+            </p>
           </div>
-          <button
-            onClick={refetch}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#e8d5e7] bg-white text-[#392b75] text-sm font-medium hover:border-[#96298d] transition-colors"
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
+          <div className="flex gap-2">
+            {profile?.role === 'admin' && (
+              <Link
+                href="/admin"
+                className="px-4 py-2 rounded-full bg-[#392b75] text-white text-sm font-semibold hover:bg-[#2d2260] transition-colors"
+              >
+                Admin Panel
+              </Link>
+            )}
+            <Link
+              href="/bookings"
+              className="px-4 py-2 rounded-full border border-[#e8d5e7] bg-white text-[#392b75] text-sm font-semibold hover:border-[#96298d] transition-colors"
+            >
+              My Bookings
+            </Link>
+          </div>
         </div>
 
-        {!loading && bookings.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {[
-              { label: 'Total bookings', value: bookings.length },
-              { label: 'Pending', value: bookings.filter(b => b.status === 'pending').length },
-              { label: 'Confirmed', value: bookings.filter(b => b.status === 'confirmed').length },
-              { label: 'Completed', value: bookings.filter(b => b.status === 'completed').length },
-            ].map(stat => (
-              <div key={stat.label} className="bg-white rounded-2xl border border-[#e8d5e7] p-4 text-center">
-                <div className="text-2xl font-bold text-[#96298d]">{stat.value}</div>
-                <div className="text-xs text-gray-400 mt-1">{stat.label}</div>
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+          {[
+            { icon: Package, label: 'Active routes', value: '5', color: 'bg-[#96298d]/10 text-[#96298d]' },
+            { icon: TrendingUp, label: 'Price from', value: '$8/kg', color: 'bg-[#f6ab2d]/10 text-[#f6ab2d]' },
+            { icon: Clock, label: 'Delivery time', value: '7–14 days', color: 'bg-green-100 text-green-600' },
+          ].map(({ icon: Icon, label, value, color }) => (
+            <div key={label} className="bg-white rounded-2xl border border-[#e8d5e7] p-4 flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+                <Icon size={18} />
               </div>
-            ))}
+              <div>
+                <div className="font-bold text-[#392b75]">{value}</div>
+                <div className="text-xs text-gray-400">{label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Traveler banner */}
+        {!profile?.isTraveler && (
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#392b75] to-[#96298d] text-white p-6 md:p-8 mb-8">
+            <div className="relative z-10 max-w-lg">
+              <h2 className="text-xl md:text-2xl font-bold mb-2">
+                Earn while you fly: Become a Traveler today
+              </h2>
+              <p className="text-white/70 text-sm mb-4">
+                Monetize your extra luggage space by helping others ship items securely.
+              </p>
+              <Link
+                href="/traveler"
+                className="inline-flex items-center gap-2 bg-[#f6ab2d] hover:bg-[#e09a20] text-[#392b75] font-bold px-5 py-2.5 rounded-full text-sm transition-colors"
+              >
+                Get Started →
+              </Link>
+            </div>
           </div>
         )}
 
+        {/* Browse */}
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-bold text-[#392b75]">Browse Journeys</h2>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+          <div className="relative max-w-xs w-full">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter by route..."
+              className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-[#e8d5e7] bg-white text-[#392b75] focus:outline-none focus:border-[#96298d] transition-all"
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {ROUTES.map(r => (
+              <button
+                key={r}
+                onClick={() => setRouteFilter(r)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  routeFilter === r
+                    ? 'bg-[#96298d] text-white'
+                    : 'bg-white text-[#392b75] border border-[#e8d5e7] hover:border-[#96298d]'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Shipment list */}
         {loading ? (
           <div className="grid gap-4">
             {[1, 2, 3].map(i => (
@@ -89,117 +171,62 @@ function BookingsContent() {
               Try again
             </button>
           </div>
-        ) : bookings.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-[#e8d5e7]">
-            <Package size={40} className="text-gray-200 mx-auto mb-4" />
-            <h3 className="font-bold text-[#392b75] mb-2">No bookings yet</h3>
-            <p className="text-sm text-gray-400 mb-6">
-              Browse available shipments and book your first cargo space.
-            </p>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 bg-[#96298d] text-white font-semibold px-6 py-3 rounded-full hover:bg-[#7a1f74] transition-colors text-sm"
-            >
-              Browse Shipments
-            </Link>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-2xl border border-[#e8d5e7]">
+            <Package size={32} className="text-gray-300 mx-auto mb-3" />
+            <p className="font-semibold text-[#392b75] mb-1">No shipments found</p>
+            <p className="text-sm text-gray-400">Check back soon — new routes are added regularly.</p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {bookings.map(booking => (
-              <div
-                key={booking._id}
-                className="bg-white rounded-2xl border border-[#e8d5e7] p-5 hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#96298d]/10 flex items-center justify-center">
-                      <Plane size={16} className="text-[#96298d]" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-[#392b75]">
-                        {booking.shipmentId?.originCode ?? '—'} → {booking.shipmentId?.destinationCode ?? 'KGL'}
-                      </div>
-                      <div className="text-xs text-gray-400">{booking.shipmentId?.route}</div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className={clsx(
-                      'text-xs font-semibold px-2.5 py-1 rounded-full border capitalize',
-                      STATUS_STYLES[booking.status]
-                    )}>
-                      {booking.status}
-                    </span>
-                    <span className={clsx(
-                      'text-xs font-medium px-2.5 py-1 rounded-full capitalize',
-                      PAYMENT_STYLES[booking.paymentStatus]
-                    )}>
-                      {booking.paymentStatus}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 py-3 border-t border-b border-[#f7f5ff] mb-4">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Weight size={13} className="text-gray-400" />
-                    <div>
-                      <div className="font-semibold text-[#392b75]">{booking.kgBooked}kg</div>
-                      <div className="text-xs text-gray-400">Cargo weight</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Calendar size={13} className="text-gray-400" />
-                    <div>
-                      <div className="font-semibold text-[#392b75]">
-                        {booking.shipmentId?.departureDate
-                          ? format(new Date(booking.shipmentId.departureDate), 'MMM d, yyyy')
-                          : '—'}
-                      </div>
-                      <div className="text-xs text-gray-400">Departure</div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-right">
-                    <div className="font-bold text-[#96298d] text-lg">
-                      ${booking.totalPrice.toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-400">Total</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
-                    Booked {format(new Date(booking.createdAt), 'MMM d, yyyy · h:mm a')}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    #{booking._id.slice(-6).toUpperCase()}
-                  </span>
-                </div>
-
-                {/* Pay Now */}
-                {booking.status === 'pending' && booking.paymentStatus === 'unpaid' && (
-                  <div className="mt-3 pt-3 border-t border-[#f7f5ff]">
-                    <button
-                      onClick={() => setPayingBooking(booking)}
-                      className="w-full flex items-center justify-center gap-2 bg-[#f6ab2d] hover:bg-[#e09a20] text-[#392b75] font-semibold py-2.5 rounded-xl text-sm transition-colors"
-                    >
-                      <CreditCard size={14} /> Pay Now — ${booking.totalPrice.toFixed(2)}
-                    </button>
-                  </div>
-                )}
-              </div>
+            {filtered.map(shipment => (
+              <RouteCard
+                key={shipment._id}
+                id={shipment._id}
+                route={shipment.route}
+                originCode={shipment.originCode}
+                destinationCode={shipment.destinationCode}
+                departureDate={shipment.departureDate}
+                totalCapacityKg={shipment.totalCapacityKg}
+                remainingCapacityKg={shipment.remainingCapacityKg}
+                pricePerKg={shipment.pricePerKg}
+                specialGoodsPricePerKg={shipment.specialGoodsPricePerKg}
+                pricePerCbm={shipment.pricePerCbm}
+                freightType={shipment.freightType}
+                status={shipment.status}
+                onBook={() => setSelectedShipment(shipment)}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Payment Modal */}
-      {payingBooking && (
+      {/* Booking Modal */}
+      {selectedShipment && (
+        <BookingModal
+          shipment={selectedShipment}
+          onClose={() => setSelectedShipment(null)}
+          onSuccess={(bookingId, amount) => {
+            setSelectedShipment(null)
+            setPendingPayment({
+              bookingId,
+              amount,
+              route: selectedShipment.route,
+            })
+            refetch()
+          }}
+        />
+      )}
+
+      {/* Payment Modal — opens immediately after Pay Now */}
+      {pendingPayment && (
         <PaymentModal
-          bookingId={payingBooking._id}
-          amount={payingBooking.totalPrice}
-          route={payingBooking.shipmentId?.route ?? 'Shipment'}
-          onClose={() => setPayingBooking(null)}
+          bookingId={pendingPayment.bookingId}
+          amount={pendingPayment.amount}
+          route={pendingPayment.route}
+          onClose={() => setPendingPayment(null)}
           onSuccess={() => {
-            setPayingBooking(null)
+            setPendingPayment(null)
             refetch()
           }}
         />

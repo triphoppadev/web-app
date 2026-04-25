@@ -3,8 +3,8 @@ import { stripe } from '@/lib/stripe'
 import { connectDB } from '@/lib/mongodb'
 import { Payment } from '@/models/Payment'
 import { Booking } from '@/models/Booking'
+import { Shipment } from '@/models/Shipment'
 import { Notification } from '@/models/Notifications'
-import Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -21,41 +21,50 @@ export async function POST(req: NextRequest) {
   }
 
   await connectDB()
-  
-if (event.type === 'payment_intent.succeeded') {
-  const intent = event.data.object as Stripe.PaymentIntent
 
-  const bookingId = intent.metadata?.bookingId
-  const userId = intent.metadata?.userId
+  if (event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object as unknown as {
+      id: string
+      metadata: {
+        bookingId: string
+        userId: string
+        kgBooked: string
+        shipmentId: string
+        freightMode: string
+      }
+    }
 
-  if (!bookingId || !userId) {
-    console.error('Missing metadata on PaymentIntent', intent.id)
-    return NextResponse.json({ received: true })
-  }
+    const { bookingId, userId, kgBooked, shipmentId, freightMode } = intent.metadata
 
-  // Update payment
-  const payment = await Payment.findOneAndUpdate(
-    { stripePaymentIntentId: intent.id },
-    { status: 'succeeded' },
-    { new: true }
-  )
+    // Update payment record
+    await Payment.findOneAndUpdate(
+      { stripePaymentIntentId: intent.id },
+      { status: 'succeeded' }
+    )
 
-  if (payment) {
+    // Update booking to confirmed + paid
     await Booking.findByIdAndUpdate(bookingId, {
       status: 'confirmed',
       paymentStatus: 'paid',
       paymentMethod: 'stripe',
     })
 
+    // NOW deduct capacity from shipment
+    if (freightMode !== 'sea' && Number(kgBooked) > 0) {
+      await Shipment.findByIdAndUpdate(shipmentId, {
+        $inc: { remainingCapacityKg: -Number(kgBooked) },
+      })
+    }
+
+    // Notify user
     await Notification.create({
       userId,
-      title: 'Payment successful!',
-      message: 'Your booking has been confirmed. We\'ll be in touch with shipment details.',
+      title: 'Payment successful! 🎉',
+      message: 'Your booking is confirmed. Your cargo space is now reserved.',
       type: 'payment',
       link: '/bookings',
     })
   }
-}
 
   if (event.type === 'payment_intent.payment_failed') {
     const intent = event.data.object as { id: string }

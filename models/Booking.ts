@@ -2,10 +2,13 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export interface IBooking extends Document {
   shipmentId: mongoose.Types.ObjectId
-  userId: string       // Firebase UID
+  userId: string
   userEmail: string
   userName: string
   kgBooked: number
+  cbmBooked: number
+  freightMode: 'air' | 'sea'
+  goodsType: 'normal' | 'special'
   totalPrice: number
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
   paymentStatus: 'unpaid' | 'paid' | 'refunded'
@@ -21,7 +24,10 @@ const BookingSchema = new Schema<IBooking>(
     userId: { type: String, required: true, index: true },
     userEmail: { type: String, required: true },
     userName: { type: String, required: true },
-    kgBooked: { type: Number, required: true, min: 1 },
+    kgBooked: { type: Number, default: 0 },
+    cbmBooked: { type: Number, default: 0 },
+    freightMode: { type: String, enum: ['air', 'sea'], default: 'air' },
+    goodsType: { type: String, enum: ['normal', 'special'], default: 'normal' },
     totalPrice: { type: Number, required: true },
     status: {
       type: String,

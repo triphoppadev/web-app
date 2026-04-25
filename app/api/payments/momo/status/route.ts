@@ -3,6 +3,7 @@ import { getMoMoPaymentStatus } from '@/lib/momo'
 import { connectDB } from '@/lib/mongodb'
 import { Payment } from '@/models/Payment'
 import { Booking } from '@/models/Booking'
+import { Shipment } from '@/models/Shipment'
 import { Notification } from '@/models/Notifications'
 
 export async function POST(req: NextRequest) {
@@ -20,19 +21,34 @@ export async function POST(req: NextRequest) {
     const momoStatus = await getMoMoPaymentStatus(momoReferenceId)
 
     if (momoStatus.status === 'SUCCESSFUL') {
+      // Update payment
       await Payment.findOneAndUpdate(
         { momoReferenceId },
         { status: 'succeeded' }
       )
-      await Booking.findByIdAndUpdate(bookingId, {
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        paymentMethod: 'momo',
-      })
+
+      // Update booking
+      const booking = await Booking.findByIdAndUpdate(
+        bookingId,
+        {
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          paymentMethod: 'momo',
+        },
+        { new: true }
+      )
+
+      // Deduct capacity NOW
+      if (booking && booking.freightMode !== 'sea' && booking.kgBooked > 0) {
+        await Shipment.findByIdAndUpdate(booking.shipmentId, {
+          $inc: { remainingCapacityKg: -booking.kgBooked },
+        })
+      }
+
       await Notification.create({
         userId: uid,
-        title: 'MoMo payment successful!',
-        message: 'Your booking has been confirmed via Mobile Money.',
+        title: 'MoMo payment successful! 🎉',
+        message: 'Your booking is confirmed. Your cargo space is now reserved.',
         type: 'payment',
         link: '/bookings',
       })
