@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       bookingId,
       userId: uid,
       amount,
-      currency: 'EUR',
+      currency: 'RWF',
       method: 'momo',
       status: 'pending',
       momoReferenceId,

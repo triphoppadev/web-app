@@ -40,7 +40,7 @@ async function getAccessToken(): Promise<string> {
 
 export async function requestMoMoPayment({
   amount,
-  currency = 'EUR',
+  currency = 'RWF',
   phone,
   note,
 }: {
