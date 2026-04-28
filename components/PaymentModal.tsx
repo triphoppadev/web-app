@@ -22,6 +22,8 @@ import clsx from 'clsx'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
+const IS_SANDBOX = process.env.NEXT_PUBLIC_MOMO_ENV === 'sandbox'
+
 type PaymentMethod = 'stripe' | 'momo'
 type PaymentStep = 'select' | 'stripe-form' | 'momo-form' | 'momo-pending' | 'success'
 
@@ -55,51 +57,100 @@ function PaymentModalContent({
   const [momoReferenceId, setMomoReferenceId] = useState('')
   const [checkingStatus, setCheckingStatus] = useState(false)
 
+  const checkMoMoStatus = async (sandboxOverride?: 'SUCCESSFUL' | 'FAILED') => {
+    if (!user) return
+    setCheckingStatus(true)
+    try {
+      const body: Record<string, string> = { momoReferenceId, bookingId }
+      if (IS_SANDBOX && sandboxOverride) {
+        body.sandboxOverride = sandboxOverride
+      }
+
+      const res = await fetch('/api/payments/momo/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-uid': user.uid,
+        },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+      console.log('[MoMo] Status response:', data)
+
+      const momoStatus = (data.status ?? '').toUpperCase()
+
+      if (momoStatus === 'SUCCESSFUL' || momoStatus === 'SUCCESS') {
+        setStep('success')
+        toast.success('Payment confirmed! 🎉')
+      } else if (momoStatus === 'FAILED') {
+        toast.error('Payment failed. Please try again.')
+        setStep('momo-form')
+      } else if (momoStatus === 'PENDING') {
+        toast('Payment still pending. Please approve on your phone first.', { icon: '⏳' })
+      } else {
+        toast(`Status: ${data.status ?? 'unknown'}. Try again.`, { icon: '⚠️' })
+      }
+    } catch {
+      toast.error('Could not check payment status. Try again.')
+    } finally {
+      setCheckingStatus(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="relative w-full sm:max-w-md bg-white dark:bg-[#1a1728] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#e8d5e7]">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#e8d5e7] dark:border-[#2d2547]">
           <div>
-            <h3 className="font-bold text-[#392b75]">Complete Payment</h3>
+            <h3 className="font-bold text-[#392b75] dark:text-white">Complete Payment</h3>
             <p className="text-xs text-gray-400">{route}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-[#f7f5ff] text-gray-400">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-[#f7f5ff] dark:hover:bg-[#2d2547] text-gray-400"
+          >
             <X size={18} />
           </button>
         </div>
 
         {/* Amount */}
-        <div className="mx-6 mt-5 p-4 rounded-2xl bg-[#f7f5ff] border border-[#e8d5e7] flex justify-between items-center mb-5">
+        <div className="mx-6 mt-5 p-4 rounded-2xl bg-[#f7f5ff] dark:bg-[#2d2547]/50 border border-[#e8d5e7] dark:border-[#2d2547] flex justify-between items-center mb-5">
           <span className="text-sm text-gray-500">Amount due</span>
           <span className="text-2xl font-bold text-[#96298d]">${amount.toFixed(2)}</span>
         </div>
 
-        {/* SUCCESS */}
+        {/* ── SUCCESS ──────────────────────────────────────────────────────── */}
         {step === 'success' && (
           <div className="px-6 pb-8 flex flex-col items-center text-center">
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
               <CheckCircle size={32} className="text-green-500" />
             </div>
-            <h3 className="text-xl font-bold text-[#392b75] mb-2">Payment Successful!</h3>
+            <h3 className="text-xl font-bold text-[#392b75] dark:text-white mb-2">
+              Payment Successful!
+            </h3>
             <p className="text-sm text-gray-500 mb-6">
-              Your booking has been confirmed. Check your bookings for details.
+              Your booking is confirmed and your cargo space is reserved.
             </p>
             <button
               onClick={() => { onSuccess(); onClose() }}
               className="w-full bg-[#96298d] text-white font-semibold py-3 rounded-xl hover:bg-[#7a1f74] transition-colors"
             >
-              View Bookings
+              View My Bookings
             </button>
           </div>
         )}
 
-        {/* SELECT METHOD */}
+        {/* ── SELECT METHOD ─────────────────────────────────────────────────── */}
         {step === 'select' && (
           <div className="px-6 pb-6">
-            <p className="text-sm font-medium text-[#392b75] mb-3">Choose payment method</p>
+            <p className="text-sm font-medium text-[#392b75] dark:text-white mb-3">
+              Choose payment method
+            </p>
             <div className="grid grid-cols-2 gap-3 mb-5">
               {([
                 {
@@ -122,13 +173,16 @@ function PaymentModalContent({
                     'flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all',
                     method === id
                       ? 'border-[#96298d] bg-[#96298d]/5'
-                      : 'border-[#e8d5e7] hover:border-[#96298d]/40'
+                      : 'border-[#e8d5e7] dark:border-[#2d2547] hover:border-[#96298d]/40'
                   )}
                 >
-                  <Icon size={22} className={method === id ? 'text-[#96298d]' : 'text-gray-400'} />
+                  <Icon
+                    size={22}
+                    className={method === id ? 'text-[#96298d]' : 'text-gray-400'}
+                  />
                   <span className={clsx(
                     'text-sm font-semibold',
-                    method === id ? 'text-[#96298d]' : 'text-[#392b75]'
+                    method === id ? 'text-[#96298d]' : 'text-[#392b75] dark:text-white'
                   )}>
                     {label}
                   </span>
@@ -146,7 +200,7 @@ function PaymentModalContent({
           </div>
         )}
 
-        {/* STRIPE FORM */}
+        {/* ── STRIPE FORM ───────────────────────────────────────────────────── */}
         {step === 'stripe-form' && (
           <StripeForm
             bookingId={bookingId}
@@ -158,14 +212,16 @@ function PaymentModalContent({
           />
         )}
 
-        {/* MOMO FORM */}
+        {/* ── MOMO FORM ─────────────────────────────────────────────────────── */}
         {step === 'momo-form' && (
           <div className="px-6 pb-6">
             <p className="text-sm text-gray-500 mb-4">
-              Enter your MTN Mobile Money number. You'll receive a payment prompt on your phone.
+              Enter your MTN Mobile Money number. You&apos;ll receive a payment
+              prompt on your phone.
             </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-[#392b75] mb-1.5">
+
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-[#392b75] dark:text-white mb-1.5">
                 MoMo phone number
               </label>
               <input
@@ -173,17 +229,28 @@ function PaymentModalContent({
                 value={momoPhone}
                 onChange={e => setMomoPhone(e.target.value)}
                 placeholder="e.g. 250780000000"
-                className="w-full px-4 py-3 rounded-xl border border-[#e8d5e7] text-[#392b75] text-sm focus:outline-none focus:border-[#96298d]"
+                className="w-full px-4 py-3 rounded-xl border border-[#e8d5e7] dark:border-[#2d2547] text-[#392b75] dark:text-white dark:bg-[#2d2547]/30 text-sm focus:outline-none focus:border-[#96298d]"
               />
               <p className="text-xs text-gray-400 mt-1">
                 Include country code e.g. 250 for Rwanda
               </p>
             </div>
 
+            {IS_SANDBOX && (
+              <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                  🧪 Sandbox test numbers
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Use <strong>46733123450</strong> to simulate a payment request
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => setStep('select')}
-                className="flex-1 py-3 rounded-xl border border-[#e8d5e7] text-sm font-medium text-[#392b75] hover:bg-[#f7f5ff]"
+                className="flex-1 py-3 rounded-xl border border-[#e8d5e7] dark:border-[#2d2547] text-sm font-medium text-[#392b75] dark:text-white hover:bg-[#f7f5ff] dark:hover:bg-[#2d2547] transition-colors"
               >
                 Back
               </button>
@@ -192,7 +259,7 @@ function PaymentModalContent({
                 amount={amount}
                 phone={momoPhone}
                 userId={user?.uid ?? ''}
-                onPending={(refId) => {
+                onPending={refId => {
                   setMomoReferenceId(refId)
                   setStep('momo-pending')
                 }}
@@ -201,114 +268,73 @@ function PaymentModalContent({
           </div>
         )}
 
-        {/* MOMO PENDING */}
+        {/* ── MOMO PENDING ──────────────────────────────────────────────────── */}
         {step === 'momo-pending' && (
           <div className="px-6 pb-6 text-center">
             <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mx-auto mb-4">
               <Smartphone size={28} className="text-yellow-600" />
             </div>
-            <h3 className="font-bold text-[#392b75] mb-2">Check your phone</h3>
+            <h3 className="font-bold text-[#392b75] dark:text-white mb-2">
+              Check your phone
+            </h3>
             <p className="text-sm text-gray-500 mb-6">
-              A payment request of <strong>${amount.toFixed(2)}</strong> has been sent to{' '}
-              <strong>{momoPhone}</strong>. Approve it on your MoMo app, then click below.
+              A payment request of <strong>${amount.toFixed(2)}</strong> has
+              been sent to <strong>{momoPhone}</strong>. Approve it on your
+              MoMo app, then click below.
             </p>
 
-            {/* <button
-              onClick={async () => {
-                if (!user) return
-                setCheckingStatus(true)
-                try {
-                  const res = await fetch('/api/payments/momo/status', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'x-user-uid': user.uid,
-                    },
-                    body: JSON.stringify({
-                      momoReferenceId,
-                      bookingId,
-                    }),
-                  })
-        
-                  const data = await res.json()
-                  console.log('MoMo status from API:',  data)
-                  if (data.status === 'SUCCESSFUL') {
-                    setStep('success')
-                    toast.success('Payment confirmed!')
-                  } else if (data.status === 'FAILED') {
-                    toast.error('Payment failed. Please try again.')
-                    setStep('momo-form')
-                  } else {
-                    toast('Payment still pending. Please approve on your phone.', { icon: '⏳' })
-                  }
-                } catch {
-                  toast.error('Could not check status. Try again.')
-                } finally {
-                  setCheckingStatus(false)
-                }
-              }}
+            {/* Main confirm button */}
+            <button
+              onClick={() => checkMoMoStatus()}
               disabled={checkingStatus}
               className="w-full flex items-center justify-center gap-2 bg-[#96298d] text-white font-semibold py-3 rounded-xl hover:bg-[#7a1f74] transition-colors disabled:opacity-60 mb-3"
             >
-              {checkingStatus
-                ? <><Loader size={14} className="animate-spin" /> Checking...</>
-                : 'I\'ve approved the payment'
-              }
-            </button> */}
+              {checkingStatus ? (
+                <><Loader size={14} className="animate-spin" /> Checking...</>
+              ) : (
+                "I've approved the payment"
+              )}
+            </button>
 
-            <button
-  onClick={async () => {
-    if (!user) return
-    setCheckingStatus(true)
-    try {
-      const res = await fetch('/api/payments/momo/status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-uid': user.uid,
-        },
-        body: JSON.stringify({
-          momoReferenceId,
-          bookingId,
-        }),
-      })
-      const data = await res.json()
-
-      console.log('MoMo status from API:', data)
-
-      // Normalize status — handles SUCCESSFUL, SUCCESS, successful etc.
-      const momoStatus = (data.status ?? '').toUpperCase()
-
-      if (momoStatus === 'SUCCESSFUL' || momoStatus === 'SUCCESS') {
-        setStep('success')
-        toast.success('Payment confirmed!')
-      } else if (momoStatus === 'FAILED') {
-        toast.error('Payment failed. Please try again.')
-        setStep('momo-form')
-      } else if (momoStatus === 'PENDING') {
-        toast('Payment still pending. Please approve on your phone.', { icon: '⏳' })
-      } else {
-        // Unknown — show raw for debugging
-        toast(`Unexpected status: ${data.status ?? 'unknown'}. Check terminal.`, { icon: '⚠️' })
-      }
-    } catch {
-      toast.error('Could not check status. Try again.')
-    } finally {
-      setCheckingStatus(false)
-    }
-  }}
-  disabled={checkingStatus}
-  className="w-full flex items-center justify-center gap-2 bg-[#96298d] text-white font-semibold py-3 rounded-xl hover:bg-[#7a1f74] transition-colors disabled:opacity-60 mb-3"
->
-  {checkingStatus
-    ? <><Loader size={14} className="animate-spin" /> Checking...</>
-    : "I've approved the payment"
-  }
-</button>
+            {/* Sandbox test controls — hidden in production */}
+            {IS_SANDBOX && (
+              <div className="mt-4 p-4 rounded-2xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-3">
+                  🧪 Sandbox — simulate payment outcome
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => checkMoMoStatus('SUCCESSFUL')}
+                    disabled={checkingStatus}
+                    className="flex-1 text-xs py-2.5 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-semibold hover:bg-green-200 transition-colors disabled:opacity-60"
+                  >
+                    {checkingStatus ? (
+                      <Loader size={12} className="animate-spin mx-auto" />
+                    ) : (
+                      '✅ Simulate Success'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => checkMoMoStatus('FAILED')}
+                    disabled={checkingStatus}
+                    className="flex-1 text-xs py-2.5 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 font-semibold hover:bg-red-200 transition-colors disabled:opacity-60"
+                  >
+                    {checkingStatus ? (
+                      <Loader size={12} className="animate-spin mx-auto" />
+                    ) : (
+                      '❌ Simulate Failure'
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                  These buttons only appear in sandbox mode
+                </p>
+              </div>
+            )}
 
             <button
               onClick={() => setStep('momo-form')}
-              className="text-sm text-gray-400 hover:text-[#96298d]"
+              className="text-sm text-gray-400 hover:text-[#96298d] mt-4 block w-full"
             >
               Use a different number
             </button>
@@ -319,7 +345,7 @@ function PaymentModalContent({
   )
 }
 
-// ─── Stripe Form Component ────────────────────────────────────────────────────
+// ─── Stripe Form ──────────────────────────────────────────────────────────────
 
 function StripeForm({
   bookingId,
@@ -350,7 +376,6 @@ function StripeForm({
     setCardError('')
 
     try {
-      // Create PaymentIntent on server
       const res = await fetch('/api/payments/stripe', {
         method: 'POST',
         headers: {
@@ -363,7 +388,6 @@ function StripeForm({
       if (!res.ok) throw new Error('Failed to create payment')
       const { clientSecret } = await res.json()
 
-      // Confirm payment with Stripe
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: cardEl,
@@ -390,7 +414,7 @@ function StripeForm({
         Enter your card details below. Payments are secured by Stripe.
       </p>
 
-      <div className="mb-4 p-4 rounded-xl border border-[#e8d5e7] bg-[#f7f5ff]">
+      <div className="mb-4 p-4 rounded-xl border border-[#e8d5e7] dark:border-[#2d2547] bg-[#f7f5ff] dark:bg-[#2d2547]/30">
         <CardElement
           options={{
             style: {
@@ -414,11 +438,15 @@ function StripeForm({
         <p className="text-xs text-red-500 mb-3">{cardError}</p>
       )}
 
-      {/* Stripe badge */}
       <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400 mb-4">
         <svg width="40" viewBox="0 0 60 25" fill="none">
-          <path d="M10 7.5C10 6.1 11.1 5 12.5 5h35C48.9 5 50 6.1 50 7.5v10c0 1.4-1.1 2.5-2.5 2.5h-35C11.1 20 10 18.9 10 17.5v-10z" fill="#635BFF"/>
-          <text x="17" y="15" fill="white" fontSize="7" fontFamily="sans-serif" fontWeight="bold">stripe</text>
+          <path
+            d="M10 7.5C10 6.1 11.1 5 12.5 5h35C48.9 5 50 6.1 50 7.5v10c0 1.4-1.1 2.5-2.5 2.5h-35C11.1 20 10 18.9 10 17.5v-10z"
+            fill="#635BFF"
+          />
+          <text x="17" y="15" fill="white" fontSize="7" fontFamily="sans-serif" fontWeight="bold">
+            stripe
+          </text>
         </svg>
         Secured by Stripe
       </div>
@@ -426,7 +454,7 @@ function StripeForm({
       <div className="flex gap-3">
         <button
           onClick={onBack}
-          className="flex-1 py-3 rounded-xl border border-[#e8d5e7] text-sm font-medium text-[#392b75] hover:bg-[#f7f5ff]"
+          className="flex-1 py-3 rounded-xl border border-[#e8d5e7] dark:border-[#2d2547] text-sm font-medium text-[#392b75] dark:text-white hover:bg-[#f7f5ff] dark:hover:bg-[#2d2547] transition-colors"
         >
           Back
         </button>
@@ -435,17 +463,18 @@ function StripeForm({
           disabled={loading || !stripe}
           className="flex-1 flex items-center justify-center gap-2 bg-[#96298d] text-white font-semibold py-3 rounded-xl hover:bg-[#7a1f74] transition-colors disabled:opacity-60"
         >
-          {loading
-            ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            : <>Pay ${amount.toFixed(2)}</>
-          }
+          {loading ? (
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <>Pay ${amount.toFixed(2)}</>
+          )}
         </button>
       </div>
     </div>
   )
 }
 
-// ─── MoMo Pay Button ─────────────────────────────────────────────────────────
+// ─── MoMo Pay Button ──────────────────────────────────────────────────────────
 
 function MoMoPayButton({
   bookingId,
@@ -480,7 +509,7 @@ function MoMoPayButton({
 
       if (!res.ok) throw new Error('Failed to initiate MoMo payment')
       const data = await res.json()
-      toast.success('Payment request sent to your phone!')
+      toast.success('Payment request sent!')
       onPending(data.momoReferenceId)
     } catch {
       toast.error('MoMo payment failed. Check your number and try again.')
@@ -495,10 +524,11 @@ function MoMoPayButton({
       disabled={loading}
       className="flex-1 flex items-center justify-center gap-2 bg-[#f6ab2d] text-[#392b75] font-semibold py-3 rounded-xl hover:bg-[#e09a20] transition-colors disabled:opacity-60"
     >
-      {loading
-        ? <span className="w-4 h-4 border-2 border-[#392b75]/30 border-t-[#392b75] rounded-full animate-spin" />
-        : <>Send request <ArrowRight size={14} /></>
-      }
+      {loading ? (
+        <span className="w-4 h-4 border-2 border-[#392b75]/30 border-t-[#392b75] rounded-full animate-spin" />
+      ) : (
+        <>Send request <ArrowRight size={14} /></>
+      )}
     </button>
   )
 }

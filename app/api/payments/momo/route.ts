@@ -5,6 +5,8 @@ import { Payment } from '@/models/Payment'
 import { Booking } from '@/models/Booking'
 
 export async function POST(req: NextRequest) {
+    console.log('[API] /payments/momo hit')
+
   try {
     await connectDB()
     const uid = req.headers.get('x-user-uid')
