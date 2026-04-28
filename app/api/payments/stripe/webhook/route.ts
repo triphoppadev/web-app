@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/mongodb'
 import { Payment } from '@/models/Payment'
 import { Booking } from '@/models/Booking'
 import { Shipment } from '@/models/Shipment'
-import { Notification } from '@/models/Notifications'
+import { notifyPaymentSuccess } from '@/lib/notifications'
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -36,34 +36,42 @@ export async function POST(req: NextRequest) {
 
     const { bookingId, userId, kgBooked, shipmentId, freightMode } = intent.metadata
 
-    // Update payment record
     await Payment.findOneAndUpdate(
       { stripePaymentIntentId: intent.id },
       { status: 'succeeded' }
     )
 
-    // Update booking to confirmed + paid
-    await Booking.findByIdAndUpdate(bookingId, {
-      status: 'confirmed',
-      paymentStatus: 'paid',
-      paymentMethod: 'stripe',
-    })
+    const booking = await Booking.findByIdAndUpdate(
+      bookingId,
+      { status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'stripe' },
+      { new: true }
+    )
 
-    // NOW deduct capacity from shipment
+    // Deduct capacity
     if (freightMode !== 'sea' && Number(kgBooked) > 0) {
       await Shipment.findByIdAndUpdate(shipmentId, {
         $inc: { remainingCapacityKg: -Number(kgBooked) },
       })
     }
 
-    // Notify user
-    await Notification.create({
-      userId,
-      title: 'Payment successful! 🎉',
-      message: 'Your booking is confirmed. Your cargo space is now reserved.',
-      type: 'payment',
-      link: '/bookings',
-    })
+    // Get shipment for email details
+    const shipment = await Shipment.findById(shipmentId)
+
+    if (booking && shipment) {
+      await notifyPaymentSuccess({
+        userId,
+        userEmail: booking.userEmail,
+        userName: booking.userName,
+        route: shipment.route,
+        departureDate: shipment.departureDate.toISOString(),
+        kgBooked: booking.kgBooked,
+        totalPrice: booking.totalPrice,
+        bookingRef: booking._id.toString().slice(-6).toUpperCase(),
+        freightMode: booking.freightMode ?? 'air',
+        goodsType: booking.goodsType ?? 'normal',
+        paymentMethod: 'stripe',
+      })
+    }
   }
 
   if (event.type === 'payment_intent.payment_failed') {

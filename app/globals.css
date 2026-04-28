@@ -5,12 +5,23 @@
 @tailwind utilities;
 
 :root {
-  --font-syne: 'Syne', sans-serif;
-  --font-dm-sans: 'DM Sans', sans-serif;
   --purple: #96298d;
   --yellow: #f6ab2d;
   --soft: #f7f5ff;
   --deep: #392b75;
+  --bg: #ffffff;
+  --card: #ffffff;
+  --border: #e8d5e7;
+  --text: #392b75;
+  --muted: #9ca3af;
+}
+
+.dark {
+  --bg: #0f0d1a;
+  --card: #1a1728;
+  --border: #2d2547;
+  --text: #e8d5f5;
+  --muted: #6b7280;
 }
 
 * {
@@ -19,29 +30,32 @@
   padding: 0;
 }
 
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 body {
-  font-family: var(--font-dm-sans);
-  background-color: #ffffff;
-  color: var(--deep);
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-syne);
+  font-family: 'Syne', sans-serif;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #f7f5ff; }
+::-webkit-scrollbar-track { background: var(--soft); }
 ::-webkit-scrollbar-thumb { background: #96298d44; border-radius: 3px; }
 
-/* Capacity bar */
 .capacity-bar {
   height: 4px;
   border-radius: 2px;
-  background: #e8d5e7;
+  background: var(--border);
   overflow: hidden;
 }
+
 .capacity-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #96298d, #f6ab2d);

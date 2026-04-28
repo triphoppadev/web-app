@@ -16,21 +16,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
-    // Verify booking
     const booking = await Booking.findOne({ _id: bookingId, userId: uid })
     if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
 
-    // Initiate MoMo payment
-    const { momoReferenceId, externalId } = await requestMoMoPayment({
+    const { momoReferenceId } = await requestMoMoPayment({
       amount,
       phone,
-      referenceId: bookingId.toString(),
       note: `Triphoppa booking #${bookingId.toString().slice(-6).toUpperCase()}`,
     })
 
-    // Create payment record
     await Payment.create({
       bookingId,
       userId: uid,
@@ -42,10 +38,11 @@ export async function POST(req: NextRequest) {
       momoPhone: phone,
     })
 
+    console.log('[MoMo] Payment record created with referenceId:', momoReferenceId)
+
     return NextResponse.json({
       momoReferenceId,
-      externalId,
-      message: 'Payment request sent to your phone. Please approve on your MoMo app.',
+      message: 'Payment request sent. Please approve on your MoMo app.',
     })
   } catch (err) {
     console.error('[POST /api/payments/momo]', err)

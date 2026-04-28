@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import RouteCard from '@/components/RouteCard'
 import BookingModal from '@/components/BookingModal'
 import PaymentModal from '@/components/PaymentModal'
+import ShipmentCarousel from '@/components/ShipmentCarousel'
 import { useAuth } from '@/lib/auth-context'
 import { useUser } from '@/lib/hooks/useUser'
 import { useShipments, type Shipment } from '@/lib/hooks/useShipments'
@@ -51,17 +52,18 @@ function DashboardContent() {
   )
 
   return (
-    <div className="min-h-screen bg-[#f7f5ff]">
+    <div className="min-h-screen bg-[#f7f5ff] dark:bg-[#0f0d1a] transition-colors">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
         {/* Greeting */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[#392b75]">
+            <h1 className="text-2xl md:text-3xl font-bold text-[#392b75] dark:text-white">
               {greeting}, {displayName} 👋
             </h1>
-            <p className="text-gray-500 mt-1 text-sm">
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
               {profile?.role === 'admin'
                 ? 'You have admin access.'
                 : 'Ready to ship something today?'}
@@ -78,7 +80,7 @@ function DashboardContent() {
             )}
             <Link
               href="/bookings"
-              className="px-4 py-2 rounded-full border border-[#e8d5e7] bg-white text-[#392b75] text-sm font-semibold hover:border-[#96298d] transition-colors"
+              className="px-4 py-2 rounded-full border border-[#e8d5e7] dark:border-[#2d2547] bg-white dark:bg-[#1a1728] text-[#392b75] dark:text-white text-sm font-semibold hover:border-[#96298d] transition-colors"
             >
               My Bookings
             </Link>
@@ -90,18 +92,34 @@ function DashboardContent() {
           {[
             { icon: Package, label: 'Active routes', value: '5', color: 'bg-[#96298d]/10 text-[#96298d]' },
             { icon: TrendingUp, label: 'Price from', value: '$8/kg', color: 'bg-[#f6ab2d]/10 text-[#f6ab2d]' },
-            { icon: Clock, label: 'Delivery time', value: '7–14 days', color: 'bg-green-100 text-green-600' },
+            { icon: Clock, label: 'Delivery time', value: '7–14 days', color: 'bg-green-100 dark:bg-green-900/30 text-green-600' },
           ].map(({ icon: Icon, label, value, color }) => (
-            <div key={label} className="bg-white rounded-2xl border border-[#e8d5e7] p-4 flex items-center gap-3">
+            <div key={label} className="bg-white dark:bg-[#1a1728] rounded-2xl border border-[#e8d5e7] dark:border-[#2d2547] p-4 flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
                 <Icon size={18} />
               </div>
               <div>
-                <div className="font-bold text-[#392b75]">{value}</div>
+                <div className="font-bold text-[#392b75] dark:text-white">{value}</div>
                 <div className="text-xs text-gray-400">{label}</div>
               </div>
             </div>
           ))}
+        </div>
+
+        {/* ── CAROUSEL ── */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-[#392b75] dark:text-white">
+              Top Picks for You
+            </h2>
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+              Live availability
+            </span>
+          </div>
+          <ShipmentCarousel
+            onBook={shipment => setSelectedShipment(shipment)}
+          />
         </div>
 
         {/* Traveler banner */}
@@ -121,15 +139,19 @@ function DashboardContent() {
                 Get Started →
               </Link>
             </div>
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10"
+              style={{ background: 'radial-gradient(circle at 80% 50%, white 0%, transparent 70%)' }}
+            />
           </div>
         )}
 
-        {/* Browse */}
+        {/* Browse Section */}
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-bold text-[#392b75]">Browse Journeys</h2>
+          <h2 className="text-xl font-bold text-[#392b75] dark:text-white">Browse Upcoming Shipments</h2>
         </div>
 
-        {/* Filters */}
+        {/* Search + Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative max-w-xs w-full">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -137,7 +159,7 @@ function DashboardContent() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Filter by route..."
-              className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-[#e8d5e7] bg-white text-[#392b75] focus:outline-none focus:border-[#96298d] transition-all"
+              className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-[#e8d5e7] dark:border-[#2d2547] bg-white dark:bg-[#1a1728] text-[#392b75] dark:text-white focus:outline-none focus:border-[#96298d] transition-all"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -148,7 +170,7 @@ function DashboardContent() {
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                   routeFilter === r
                     ? 'bg-[#96298d] text-white'
-                    : 'bg-white text-[#392b75] border border-[#e8d5e7] hover:border-[#96298d]'
+                    : 'bg-white dark:bg-[#1a1728] text-[#392b75] dark:text-white border border-[#e8d5e7] dark:border-[#2d2547] hover:border-[#96298d]'
                 }`}
               >
                 {r}
@@ -157,24 +179,24 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* Shipment list */}
+        {/* Shipment List */}
         {loading ? (
           <div className="grid gap-4">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-36 rounded-2xl bg-white animate-pulse border border-[#e8d5e7]" />
+              <div key={i} className="h-36 rounded-2xl bg-white dark:bg-[#1a1728] animate-pulse border border-[#e8d5e7] dark:border-[#2d2547]" />
             ))}
           </div>
         ) : error ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-[#e8d5e7]">
+          <div className="text-center py-12 bg-white dark:bg-[#1a1728] rounded-2xl border border-[#e8d5e7] dark:border-[#2d2547]">
             <p className="text-red-500 text-sm mb-3">{error}</p>
             <button onClick={refetch} className="text-sm text-[#96298d] font-semibold hover:underline">
               Try again
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-[#e8d5e7]">
+          <div className="text-center py-16 bg-white dark:bg-[#1a1728] rounded-2xl border border-[#e8d5e7] dark:border-[#2d2547]">
             <Package size={32} className="text-gray-300 mx-auto mb-3" />
-            <p className="font-semibold text-[#392b75] mb-1">No shipments found</p>
+            <p className="font-semibold text-[#392b75] dark:text-white mb-1">No shipments found</p>
             <p className="text-sm text-gray-400">Check back soon — new routes are added regularly.</p>
           </div>
         ) : (
@@ -218,7 +240,7 @@ function DashboardContent() {
         />
       )}
 
-      {/* Payment Modal — opens immediately after Pay Now */}
+      {/* Payment Modal */}
       {pendingPayment && (
         <PaymentModal
           bookingId={pendingPayment.bookingId}

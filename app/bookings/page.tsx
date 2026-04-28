@@ -1,10 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import Navbar from '@/components/Navbar'
-import { useBookings } from '@/lib/hooks/useBookings'
+import PaymentModal from '@/components/PaymentModal'
+import { useBookings, type Booking } from '@/lib/hooks/useBookings'
 import { format } from 'date-fns'
-import { Package, Plane, Calendar, Weight, RefreshCw } from 'lucide-react'
+import {
+  Package,
+  Plane,
+  Calendar,
+  Weight,
+  RefreshCw,
+  CreditCard,
+  Clock,
+  CheckCircle,
+} from 'lucide-react'
 import clsx from 'clsx'
 import Link from 'next/link'
 
@@ -31,12 +42,18 @@ const PAYMENT_STYLES: Record<string, string> = {
 
 function BookingsContent() {
   const { bookings, loading, error, refetch } = useBookings()
+  const [payingBooking, setPayingBooking] = useState<Booking | null>(null)
+
+  const pendingCount = bookings.filter(
+    b => b.status === 'pending' && b.paymentStatus === 'unpaid'
+  ).length
 
   return (
     <div className="min-h-screen bg-[#f7f5ff]">
       <Navbar />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
 
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-[#392b75]">My Bookings</h1>
@@ -50,11 +67,28 @@ function BookingsContent() {
           </button>
         </div>
 
+        {/* Pending payment banner */}
+        {pendingCount > 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-2xl bg-yellow-50 border border-yellow-200 mb-6">
+            <Clock size={18} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-800">
+                You have {pendingCount} unpaid booking{pendingCount > 1 ? 's' : ''}
+              </p>
+              <p className="text-xs text-yellow-700 mt-0.5">
+                Your cargo space is <strong>not reserved</strong> until payment is completed.
+                Complete payment below to secure your spot.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats */}
         {!loading && bookings.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
               { label: 'Total bookings', value: bookings.length },
-              { label: 'Pending', value: bookings.filter(b => b.status === 'pending').length },
+              { label: 'Pending payment', value: bookings.filter(b => b.paymentStatus === 'unpaid').length },
               { label: 'Confirmed', value: bookings.filter(b => b.status === 'confirmed').length },
               { label: 'Completed', value: bookings.filter(b => b.status === 'completed').length },
             ].map(stat => (
@@ -66,6 +100,7 @@ function BookingsContent() {
           </div>
         )}
 
+        {/* Content */}
         {loading ? (
           <div className="grid gap-4">
             {[1, 2, 3].map(i => (
@@ -75,7 +110,10 @@ function BookingsContent() {
         ) : error ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-[#e8d5e7]">
             <p className="text-red-500 text-sm mb-3">{error}</p>
-            <button onClick={refetch} className="text-sm text-[#96298d] font-semibold hover:underline">
+            <button
+              onClick={refetch}
+              className="text-sm text-[#96298d] font-semibold hover:underline"
+            >
               Try again
             </button>
           </div>
@@ -98,8 +136,14 @@ function BookingsContent() {
             {bookings.map(booking => (
               <div
                 key={booking._id}
-                className="bg-white rounded-2xl border border-[#e8d5e7] p-5 hover:shadow-sm transition-shadow"
+                className={clsx(
+                  'bg-white rounded-2xl border p-5 hover:shadow-sm transition-shadow',
+                  booking.status === 'pending' && booking.paymentStatus === 'unpaid'
+                    ? 'border-yellow-200'
+                    : 'border-[#e8d5e7]'
+                )}
               >
+                {/* Card Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-[#96298d]/10 flex items-center justify-center">
@@ -112,6 +156,8 @@ function BookingsContent() {
                       <div className="text-xs text-gray-400">{booking.shipmentId?.route}</div>
                     </div>
                   </div>
+
+                  {/* Status badges */}
                   <div className="flex flex-col items-end gap-1.5">
                     <span className={clsx(
                       'text-xs font-semibold px-2.5 py-1 rounded-full border capitalize',
@@ -128,12 +174,17 @@ function BookingsContent() {
                   </div>
                 </div>
 
+                {/* Details row */}
                 <div className="grid grid-cols-3 gap-4 py-3 border-t border-b border-[#f7f5ff] mb-4">
                   <div className="flex items-center gap-1.5 text-sm">
                     <Weight size={13} className="text-gray-400" />
                     <div>
-                      <div className="font-semibold text-[#392b75]">{booking.kgBooked}kg</div>
-                      <div className="text-xs text-gray-400">Cargo weight</div>
+                      <div className="font-semibold text-[#392b75]">
+                        {booking.kgBooked > 0 ? `${booking.kgBooked}kg` : `${booking.cbmBooked ?? 0}cbm`}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {booking.kgBooked > 0 ? 'Cargo weight' : 'Volume'}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 text-sm">
@@ -151,10 +202,21 @@ function BookingsContent() {
                     <div className="font-bold text-[#96298d] text-lg">
                       ${booking.totalPrice.toFixed(2)}
                     </div>
-                    <div className="text-xs text-gray-400">Total</div>
+                    <div className="text-xs text-gray-400">Total due</div>
                   </div>
                 </div>
 
+                {/* Confirmed indicator */}
+                {booking.status === 'confirmed' && booking.paymentStatus === 'paid' && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-200 mb-3">
+                    <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                    <p className="text-xs text-green-700 font-medium">
+                      Your cargo space is reserved and confirmed!
+                    </p>
+                  </div>
+                )}
+
+                {/* Footer */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">
                     Booked {format(new Date(booking.createdAt), 'MMM d, yyyy · h:mm a')}
@@ -163,11 +225,40 @@ function BookingsContent() {
                     #{booking._id.slice(-6).toUpperCase()}
                   </span>
                 </div>
+
+                {/* Pay Now section — only for pending unpaid bookings */}
+                {booking.status === 'pending' && booking.paymentStatus === 'unpaid' && (
+                  <div className="mt-4 pt-4 border-t border-yellow-100 space-y-2">
+                    <p className="text-xs text-yellow-700 text-center">
+                      ⚠️ Space not reserved — complete payment to secure your booking
+                    </p>
+                    <button
+                      onClick={() => setPayingBooking(booking)}
+                      className="w-full flex items-center justify-center gap-2 bg-[#f6ab2d] hover:bg-[#e09a20] text-[#392b75] font-semibold py-3 rounded-xl text-sm transition-colors"
+                    >
+                      <CreditCard size={15} /> Pay Now — ${booking.totalPrice.toFixed(2)}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Payment Modal */}
+      {payingBooking && (
+        <PaymentModal
+          bookingId={payingBooking._id}
+          amount={payingBooking.totalPrice}
+          route={payingBooking.shipmentId?.route ?? 'Shipment'}
+          onClose={() => setPayingBooking(null)}
+          onSuccess={() => {
+            setPayingBooking(null)
+            refetch()
+          }}
+        />
+      )}
     </div>
   )
 }

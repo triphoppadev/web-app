@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/mongodb'
 import { Payment } from '@/models/Payment'
 import { Booking } from '@/models/Booking'
 import { Shipment } from '@/models/Shipment'
-import { Notification } from '@/models/Notifications'
+import { notifyPaymentSuccess } from '@/lib/notifications'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,48 +18,77 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing reference ID' }, { status: 400 })
     }
 
-    const momoStatus = await getMoMoPaymentStatus(momoReferenceId)
+    console.log('[MoMo Status] Checking:', momoReferenceId)
 
-    if (momoStatus.status === 'SUCCESSFUL') {
-      // Update payment
+    let momoData: { status?: string; financialTransactionId?: string } = {}
+    
+    try {
+      momoData = await getMoMoPaymentStatus(momoReferenceId)
+    } catch (err: unknown) {
+      const error = err as { response?: { status: number; data: { code?: string } } }
+      
+      // 404 means MoMo can't find the transaction yet — treat as pending
+      if (error.response?.status === 404) {
+        console.log('[MoMo Status] 404 — transaction not found yet, treating as PENDING')
+        return NextResponse.json({ 
+          status: 'PENDING',
+          message: 'Transaction not found yet. Please wait a moment and try again.'
+        })
+      }
+      throw err
+    }
+
+    console.log('[MoMo Status] Raw response:', JSON.stringify(momoData, null, 2))
+
+    const rawStatus = momoData?.status ?? ''
+    const status = rawStatus.toUpperCase()
+
+    console.log('[MoMo Status] Normalized status:', status)
+
+    if (status === 'SUCCESSFUL') {
       await Payment.findOneAndUpdate(
         { momoReferenceId },
         { status: 'succeeded' }
       )
 
-      // Update booking
       const booking = await Booking.findByIdAndUpdate(
         bookingId,
-        {
-          status: 'confirmed',
-          paymentStatus: 'paid',
-          paymentMethod: 'momo',
-        },
+        { status: 'confirmed', paymentStatus: 'paid', paymentMethod: 'momo' },
         { new: true }
       )
 
-      // Deduct capacity NOW
-      if (booking && booking.freightMode !== 'sea' && booking.kgBooked > 0) {
-        await Shipment.findByIdAndUpdate(booking.shipmentId, {
-          $inc: { remainingCapacityKg: -booking.kgBooked },
-        })
-      }
+      if (booking) {
+        if (booking.freightMode !== 'sea' && booking.kgBooked > 0) {
+          await Shipment.findByIdAndUpdate(booking.shipmentId, {
+            $inc: { remainingCapacityKg: -booking.kgBooked },
+          })
+        }
 
-      await Notification.create({
-        userId: uid,
-        title: 'MoMo payment successful! 🎉',
-        message: 'Your booking is confirmed. Your cargo space is now reserved.',
-        type: 'payment',
-        link: '/bookings',
-      })
-    } else if (momoStatus.status === 'FAILED') {
+        const shipment = await Shipment.findById(booking.shipmentId)
+        if (shipment) {
+          await notifyPaymentSuccess({
+            userId: uid,
+            userEmail: booking.userEmail,
+            userName: booking.userName,
+            route: shipment.route,
+            departureDate: shipment.departureDate.toISOString(),
+            kgBooked: booking.kgBooked,
+            totalPrice: booking.totalPrice,
+            bookingRef: booking._id.toString().slice(-6).toUpperCase(),
+            freightMode: booking.freightMode ?? 'air',
+            goodsType: booking.goodsType ?? 'normal',
+            paymentMethod: 'momo',
+          })
+        }
+      }
+    } else if (status === 'FAILED') {
       await Payment.findOneAndUpdate(
         { momoReferenceId },
         { status: 'failed' }
       )
     }
 
-    return NextResponse.json({ status: momoStatus.status })
+    return NextResponse.json({ status, raw: momoData })
   } catch (err) {
     console.error('[POST /api/payments/momo/status]', err)
     return NextResponse.json({ error: 'Failed to check status' }, { status: 500 })

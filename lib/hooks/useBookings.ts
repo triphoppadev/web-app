@@ -14,6 +14,9 @@ export interface Booking {
     pricePerKg: number
   }
   kgBooked: number
+  cbmBooked: number
+  freightMode: string
+  goodsType: string
   totalPrice: number
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
   paymentStatus: 'unpaid' | 'paid' | 'refunded'

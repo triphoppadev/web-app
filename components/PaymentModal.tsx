@@ -213,7 +213,7 @@ function PaymentModalContent({
               <strong>{momoPhone}</strong>. Approve it on your MoMo app, then click below.
             </p>
 
-            <button
+            {/* <button
               onClick={async () => {
                 if (!user) return
                 setCheckingStatus(true)
@@ -229,7 +229,9 @@ function PaymentModalContent({
                       bookingId,
                     }),
                   })
+        
                   const data = await res.json()
+                  console.log('MoMo status from API:',  data)
                   if (data.status === 'SUCCESSFUL') {
                     setStep('success')
                     toast.success('Payment confirmed!')
@@ -252,7 +254,57 @@ function PaymentModalContent({
                 ? <><Loader size={14} className="animate-spin" /> Checking...</>
                 : 'I\'ve approved the payment'
               }
-            </button>
+            </button> */}
+
+            <button
+  onClick={async () => {
+    if (!user) return
+    setCheckingStatus(true)
+    try {
+      const res = await fetch('/api/payments/momo/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-uid': user.uid,
+        },
+        body: JSON.stringify({
+          momoReferenceId,
+          bookingId,
+        }),
+      })
+      const data = await res.json()
+
+      console.log('MoMo status from API:', data)
+
+      // Normalize status — handles SUCCESSFUL, SUCCESS, successful etc.
+      const momoStatus = (data.status ?? '').toUpperCase()
+
+      if (momoStatus === 'SUCCESSFUL' || momoStatus === 'SUCCESS') {
+        setStep('success')
+        toast.success('Payment confirmed!')
+      } else if (momoStatus === 'FAILED') {
+        toast.error('Payment failed. Please try again.')
+        setStep('momo-form')
+      } else if (momoStatus === 'PENDING') {
+        toast('Payment still pending. Please approve on your phone.', { icon: '⏳' })
+      } else {
+        // Unknown — show raw for debugging
+        toast(`Unexpected status: ${data.status ?? 'unknown'}. Check terminal.`, { icon: '⚠️' })
+      }
+    } catch {
+      toast.error('Could not check status. Try again.')
+    } finally {
+      setCheckingStatus(false)
+    }
+  }}
+  disabled={checkingStatus}
+  className="w-full flex items-center justify-center gap-2 bg-[#96298d] text-white font-semibold py-3 rounded-xl hover:bg-[#7a1f74] transition-colors disabled:opacity-60 mb-3"
+>
+  {checkingStatus
+    ? <><Loader size={14} className="animate-spin" /> Checking...</>
+    : "I've approved the payment"
+  }
+</button>
 
             <button
               onClick={() => setStep('momo-form')}
